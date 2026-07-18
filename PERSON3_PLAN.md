@@ -6,6 +6,85 @@
 
 ---
 
+## Local Dev Environment Setup (Do This First)
+
+You need **Postgres** (database), **Redis** (Celery broker), and **Python 3.11+** running on your machine. The easiest way is Docker.
+
+### Step 1: Start Postgres (Docker)
+
+```bash
+docker run --name postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=backend_api \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+This runs Postgres 16 in the background, exposed on port `5432`. The connection string becomes:
+```
+postgresql+asyncpg://postgres:postgres@localhost:5432/backend_api
+```
+
+### Step 2: Start Redis (Docker)
+
+```bash
+docker run --name redis \
+  -p 6379:6379 \
+  -d redis:7
+```
+
+Redis runs on port `6379` — Celery uses this as its broker.
+
+### Step 3: Verify Both Are Running
+
+```bash
+docker ps
+# You should see both "postgres" and "redis" containers with "Up" status
+```
+
+### Step 4: Set Up Python Environment
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy env file
+cp .env.example .env
+# The defaults in .env already match the Docker Postgres/Redis above
+```
+
+### Step 5: Run Database Migrations
+
+```bash
+alembic upgrade head
+```
+
+### Step 6: Start the API
+
+```bash
+uvicorn app.main:app --reload
+# Visit http://localhost:8000/docs
+```
+
+### Stopping & Cleaning Up
+
+```bash
+# Stop containers
+docker stop postgres redis
+
+# Remove containers (data is lost)
+docker rm postgres redis
+
+# To persist data, add -v flags:
+# docker run --name postgres -v postgres_data:/var/lib/postgresql/data ...
+```
+
+---
+
 ## Step-by-Step Execution Plan
 
 ### Phase 0: Day 1 — Kickoff & Contracts (Coordinate with Team)
@@ -19,7 +98,7 @@
 
 | # | Task | Files to Implement | What It Does | Est. Time |
 |---|------|-------------------|-------------|-----------|
-| 1.1 | **Set up dev environment** | — | Install Python 3.11, Postgres, Redis locally. Run `pip install -r requirements.txt`. | 1 hr |
+| 1.1 | **Set up dev environment** | — | Run Postgres + Redis via Docker (see setup section above). Install Python deps. | 1 hr |
 | 1.2 | **Implement config** | [`app/config.py`](backend-api/app/config.py) | Reads env vars via Pydantic Settings. **Input:** `.env` file. **Output:** `settings` singleton used everywhere. | 30 min |
 | 1.3 | **Implement database setup** | [`app/database.py`](backend-api/app/database.py) | Creates async SQLAlchemy engine + session factory. **Input:** `DATABASE_URL`. **Output:** `get_db()` dependency. | 30 min |
 | 1.4 | **Implement ORM models** | [`app/models.py`](backend-api/app/models.py) | Define `Repo`, `Job`, `User` tables. **Input:** Schema definitions. **Output:** Python classes mapping to Postgres. | 1 hr |

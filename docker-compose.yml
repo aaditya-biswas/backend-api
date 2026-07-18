@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: backend-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: backend_api
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:7
+    container_name: backend-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout:  5s
+      retries:  5
+  
+  mock-llm:
+    build:
+      context:  .
+      dockerfile: Dockerfile
+    container_name: backend-mock-llm
+    command:  uvicorn mocks.fake_llm_service:app  --host  0.0.0.0 --port  8001
+    ports:
+      - "8001:8001"
+    networks:
+      - backend-network
+  
+  mock-ingestion:
+    build:
+      context:  .
+      dockerfile: Dockerfile
+    container_name: backend-mock-ingestion
+    command:  uvicorn mocks.fake_ingestion_service:app  --host  0.0.0.0 --port  8002
+    ports:
+      - "8002:8002"
+    networks:
+      - backend-network
+
+  api:
+    build:
+      context:  .
+      dockerfile: Dockerfile
+    container_name: backend-api
+    command:  sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/backend_api
+      REDIS_URL:  redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND:  redis://redis:6379/0
+      LLM_SERVICE_URL:  http://mock-llm:8001
+      INGESTION_SERVICE_URL: http://mock-ingestion:8002
+      API_KEY:  dev-key
+      SECRET_KEY: change-me-to-a-random-secret
+    depends_on:
+      postgres:
+        condition:  service_healthy
+      redis:
+        condition:  service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - backend-network
+  
+  celery-worker:
+    build:
+      context:  .
+      dockerfile: Dockerfile
+    container_name: backend-celery-worker
+    command:  celery -A app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/backend_api
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      LLM_SERVICE_URL: http://mock-llm:8001
+      INGESTION_SERVICE_URL: http://mock-ingestion:8002
+      API_KEY: dev-key
+      SECRET_KEY: change-me-to-a-random-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - backend-network
+
+volumes:
+  postgres_data:
+
+networks:
+  backend-network:
+    driver: bridge

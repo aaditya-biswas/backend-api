@@ -24,26 +24,48 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """
-    STUB: Create initial tables.
-    
-    TODO:
-    1. Create 'repos' table with columns: id (UUID PK), owner, name, github_url,
-       status, commit_sha, created_at, updated_at
-    2. Create 'jobs' table with columns: id (UUID PK), repo_id (FK→repos),
-       type, status, progress, error, created_at, updated_at
-    3. Create 'users' table with columns: id (UUID PK), email (unique),
-       api_key_hash, created_at
+    Create initial tables: repos, jobs, users.
     """
-    raise NotImplementedError("Implement initial migration upgrade")
+    # Create repos table
+    op.create_table(
+        "repos",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("owner", sa.String(255), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("github_url", sa.String(1024), nullable=False),
+        sa.Column("status", sa.String(50), server_default="pending"),
+        sa.Column("commit_sha", sa.String(40), nullable=True),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()")),
+    )
+
+    # Create jobs table
+    op.create_table(
+        "jobs",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("repo_id", UUID(as_uuid=True), sa.ForeignKey("repos.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("type", sa.String(50), nullable=False),
+        sa.Column("status", sa.String(50), server_default="pending"),
+        sa.Column("progress", sa.Integer(), server_default=sa.text("0")),
+        sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()")),
+    )
+
+    # Create users table
+    op.create_table(
+        "users",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("email", sa.String(255), unique=True, nullable=False),
+        sa.Column("api_key_hash", sa.String(255), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+    )
 
 
 def downgrade() -> None:
     """
-    STUB: Drop all tables.
-    
-    TODO:
-    1. Drop 'jobs' table
-    2. Drop 'repos' table
-    3. Drop 'users' table
+    Drop all tables.
     """
-    raise NotImplementedError("Implement initial migration downgrade")
+    op.drop_table("jobs")
+    op.drop_table("repos")
+    op.drop_table("users")
