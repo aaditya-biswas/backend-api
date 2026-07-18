@@ -13,11 +13,12 @@ from typing import Optional
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/backend_api"
-
+    SYNC_DATABASE_URL : str = "postgresql+psycopg2://postgres:postgres@localhost:5432/backend_api"
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
 
     # External Service URLs
     LLM_SERVICE_URL: str = "http://localhost:8001"

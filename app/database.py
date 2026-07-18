@@ -14,7 +14,8 @@ RESOURCES TO LEARN:
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-
+from sqlalchemy.orm import Session , sessionmaker
+from sqlalchemy import create_engine
 from app.config import settings
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
@@ -36,3 +37,15 @@ async def get_db() -> AsyncSession:
             raise
         finally:
             await session.close()
+
+
+# Sync engine for celery workers 
+sync_engine = create_engine(
+    settings.SYNC_DATABASE_URL,
+    pool_size = 5, # Reuse connecction accross tasks
+    max_overflow= 10, # allow burst connextions
+    pool_pre_ping=True, # Verify connections before use 
+    echo = False
+)
+
+SyncSession = sessionmaker(bind=sync_engine,class_=Session)
