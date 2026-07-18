@@ -14,6 +14,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - backend-network
   
   redis:
     image: redis:7
@@ -25,6 +27,8 @@ services:
       interval: 5s
       timeout:  5s
       retries:  5
+    networks:
+      - backend-network
   
   mock-llm:
     build:

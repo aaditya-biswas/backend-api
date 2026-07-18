@@ -11,11 +11,19 @@ RESOURCES TO LEARN:
 
 import asyncio
 import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
+
+# Ensure the project root is on sys.path so that 'app' module is importable.
+# Alembic changes the working directory to the script_location (alembic/),
+# so we need to add the parent directory to sys.path.
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from app.database import Base
 from app.models import Repo, Job, User  # noqa: F401 - ensure models are imported
