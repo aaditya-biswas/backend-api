@@ -121,12 +121,39 @@ docker rm postgres redis   # removes containers (data lost)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/backend_api` | Postgres connection string |
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/backend_api` | Postgres connection string (async, for FastAPI routes) |
+| `SYNC_DATABASE_URL` | `postgresql+psycopg2://postgres:postgres@localhost:5432/backend_api` | Postgres connection string (sync, for Celery tasks) |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
 | `LLM_SERVICE_URL` | `http://localhost:8001` | Person 1's LLM service URL |
 | `INGESTION_SERVICE_URL` | `http://localhost:8002` | Person 2's Ingestion service URL |
 | `API_KEY` | `dev-key` | API key for authentication |
 | `SECRET_KEY` | `change-me` | Secret for webhook HMAC verification |
+
+## Service Clients
+
+### [`app/services/ingestion_client.py`](app/services/ingestion_client.py)
+
+Async HTTP client for Person 2's Ingestion Service. Uses a shared `httpx.AsyncClient` with connection pooling (lazy-initialised via `get_client()`).
+
+| Method | HTTP Call | Description |
+|--------|-----------|-------------|
+| `ingest_repo(repo_id, github_url, github_token)` | `POST /ingest` | Start full repo ingestion |
+| `search(repo_id, query, top_k=6)` | `POST /search` | Search for relevant code chunks; returns `list[CodeChunk]` sorted by score descending |
+| `delete_files(repo_id, file_paths)` | `DELETE /ingest/{repo_id}/files` | Remove specific files from the index |
+
+### [`app/tasks/ingestion.py`](app/tasks/ingestion.py)
+
+Celery tasks for background ingestion. Uses a sync `httpx.Client` (Celery tasks are synchronous) with its own connection pool.
+
+| Task | Description |
+|------|-------------|
+| `ingest_repo(repo_id, github_url, github_token)` | Calls ingestion service, updates Job/Repo status in DB, retries up to 3 times on failure |
+| `re_ingest_files(repo_id, file_paths)` | Re-ingest specific files (TODO) |
+
+## Database Sessions
+
+- **Async** (FastAPI routes): `get_db()` dependency → `async_session` → `AsyncSession` with `asyncpg` driver
+- **Sync** (Celery tasks): `SyncSession()` factory → `Session` with `psycopg2` driver, shared engine with connection pooling (`pool_size=5`, `max_overflow=10`, `pool_pre_ping=True`)
 
 ## Docs
 

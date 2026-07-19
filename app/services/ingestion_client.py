@@ -21,51 +21,94 @@ RESOURCES TO LEARN:
 - YouTube: "Python httpx Tutorial" - https://www.youtube.com/results?search_query=python+httpx+async+client+tutorial
 """
 
+import httpx
 from app.config import settings
 from app.schemas import CodeChunk
 
+# Shared AsyncClient with connection pooling (lazy-initialised)
+_ingestion_client: httpx.AsyncClient | None = None
 
-async def ingest_repo(repo_id: str, github_url: str, github_token: str = None) -> dict:
+
+async def get_client() -> httpx.AsyncClient:
+    """Return the shared AsyncClient, creating it on first call."""
+    global _ingestion_client
+    if _ingestion_client is None:
+        _ingestion_client = httpx.AsyncClient(
+            base_url=settings.INGESTION_SERVICE_URL,
+            timeout=300.0,
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+                keepalive_expiry=30.0,
+            ),
+        )
+    return _ingestion_client
+
+
+async def ingest_repo(repo_id: str, github_url: str, github_token: str | None = None) -> dict:
     """
-    STUB: Tell Person 2's service to ingest a repo.
+    Tell Person 2's service to ingest a repo.
     
     INPUT: repo_id, github_url, optional github_token.
     OUTPUT: {"status": "started"} from ingestion service.
     
-    TODO:
     1. POST {INGESTION_SERVICE_URL}/ingest
        Body: {"repo_id": repo_id, "github_url": github_url, "github_token": github_token}
     2. Return response JSON
     """
-    raise NotImplementedError("Implement ingestion_client.ingest_repo")
+    client = await get_client()
+    resp = await client.post("/ingest", json={
+        "repo_id": repo_id,
+        "github_url": github_url,
+        "github_token": github_token,
+    })
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def search(repo_id: str, query: str, top_k: int = 6) -> list[CodeChunk]:
     """
-    STUB: Search for relevant code chunks.
+    Search for relevant code chunks.
     
     INPUT: repo_id to search in, natural language query, number of results (top_k).
     OUTPUT: List of CodeChunk objects sorted by relevance score.
     
-    TODO:
     1. POST {INGESTION_SERVICE_URL}/search
        Body: {"repo_id": repo_id, "query": query, "top_k": top_k}
     2. Parse response chunks into CodeChunk objects
     3. Return sorted list by score descending
     """
-    raise NotImplementedError("Implement ingestion_client.search")
+    client = await get_client()
+    resp = await client.post(
+        "/search",
+        json={
+            "repo_id": repo_id,
+            "query": query,
+            "top_k": top_k,
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    chunks = [CodeChunk(**item) for item in data]
+    chunks.sort(key=lambda c: c.score, reverse=True)
+    return chunks
 
 
 async def delete_files(repo_id: str, file_paths: list[str]) -> dict:
     """
-    STUB: Delete specific files from the index.
+    Delete specific files from the index.
     
     INPUT: repo_id, list of file paths to remove.
     OUTPUT: {"status": "deleted"} from ingestion service.
     
-    TODO:
     1. DELETE {INGESTION_SERVICE_URL}/ingest/{repo_id}/files
        Body: {"file_paths": file_paths}
     2. Return response JSON
     """
-    raise NotImplementedError("Implement ingestion_client.delete_files")
+    client = await get_client()
+    resp = await client.delete(
+        f"/ingest/{repo_id}/files",
+        json={"file_paths": file_paths},
+    )
+    resp.raise_for_status()
+    return resp.json()
